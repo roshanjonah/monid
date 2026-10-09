@@ -8,9 +8,10 @@ lockfile, native limits and existing assertions are unchanged.
 
 ## Coverage and execution
 
-- `connectors/sendmux/endpoint-contract.test.ts`: 18 tests run sealed endpoints
+- `connectors/sendmux/endpoint-contract.test.ts`: 20 tests run sealed endpoints
   through the real engine, covering the remaining native routes, selectors,
-  bodies, output, caps and before-IO ownership denial.
+  bodies, output, caps and before-IO ownership denial, plus foreign-message
+  native 404/no broader retry and field fidelity for all four source actions.
 - `connectors/sendmux/resources/mailbox/resource.test.ts`: seven added tests
   cover verify/refresh/release outcomes and all cumulative cost lines, including
   repeated/post-release reads, exact windows, finality, amounts and failures.
@@ -24,7 +25,7 @@ lockfile, native limits and existing assertions are unchanged.
 
 `scripts/test-sendmux-regressions.ts` temporarily introduces isolated
 regressions and restores source in `finally`. Eight stages must execute failing
-tests: ownership (18), persistence (2), verify (1), refresh (1), release (1),
+tests: ownership (20), persistence (2), verify (1), refresh (1), release (1),
 meters (4), event routing (1) and native signature prefix (2). Compiler
 failures, empty summaries and ignored required tests cannot satisfy red
 evidence. The final focused Sendmux suite must pass with zero ignores on

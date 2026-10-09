@@ -180,7 +180,7 @@ try {
     await removeEndpointBindings();
     await runTests("red-ownership", [
         "connectors/sendmux/endpoint-contract.test.ts",
-    ], 18);
+    ], 20);
 } finally {
     await restore();
 }

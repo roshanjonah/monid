@@ -327,6 +327,144 @@ for (const entry of cases) {
     );
 }
 
+Deno.test("sendmux foreign message keeps its owned selector and stops at native 404", async () => {
+    let calls = 0;
+    const engine = new Engine({
+        transport: directTransport({
+            params: () => Promise.resolve({ apiKey: "test-key" }),
+            fetch: (request, init) => {
+                calls++;
+                assertEquals(init?.method, "GET");
+                assertEquals(
+                    String(request),
+                    "https://app.sendmux.ai/api/v1/mailbox/messages/msg_foreign?mailbox_id=mbx_owned",
+                );
+                return Promise.resolve(
+                    Response.json({ ok: false, error: { code: "not_found" } }, {
+                        status: 404,
+                    }),
+                );
+            },
+        }),
+        resources: fixtureReader([{
+            resource: "sendmux/mailbox",
+            externalId: mailboxId,
+            data: { email: "agent@example.com" },
+        }]),
+    });
+    const loaded = await engine.load(
+        await testSealedUnit("sendmux#get-message"),
+    );
+    const result = await loaded.run({
+        pathParams: { message_id: "msg_foreign" },
+        queryParams: { mailbox_id: mailboxId },
+    });
+    assertEquals(result.httpStatus, 404);
+    assertEquals(result.usage.credits, {});
+    assertEquals(calls, 1);
+    assertEquals(
+        (await loaded.run({
+            pathParams: { message_id: "msg_foreign" },
+            queryParams: { mailbox_id: "mbx_foreign" },
+        })).httpStatus,
+        404,
+    );
+    assertEquals(calls, 1);
+});
+
+Deno.test("sendmux source drafts preserve every native field and action within bounds", async () => {
+    const address = { email: "recipient@example.com", name: "Recipient" };
+    const fields = {
+        from: { email: "agent@example.com", name: null },
+        to: [address],
+        cc: [address],
+        bcc: [address],
+        reply_to: [address],
+        subject: "Invoice",
+        text_body: "Invoice\r\n",
+        html_body: "<p>Invoice</p>",
+        custom_headers: { "X-Reference": "invoice_1" },
+        attachments: [{
+            blob_id: "blob_1",
+            filename: "invoice.pdf",
+            content_type: "application/pdf",
+            size_bytes: 7_500_000,
+            disposition: "inline",
+            content_id: "invoice_1",
+        }],
+    };
+    let calls = 0;
+    let expectedBody: Json = fields;
+    const engine = new Engine({
+        transport: directTransport({
+            params: () => Promise.resolve({ apiKey: "test-key" }),
+            fetch: (request, init) => {
+                calls++;
+                assertEquals(init?.method, "POST");
+                assertEquals(
+                    String(request),
+                    "https://app.sendmux.ai/api/v1/mailbox/drafts?mailbox_id=mbx_owned",
+                );
+                assertEquals(JSON.parse(String(init?.body)), expectedBody);
+                return Promise.resolve(Response.json({
+                    ok: true,
+                    data: { id: "draft_1", revision: 1, status: "ready" },
+                }, { status: 201 }));
+            },
+        }),
+        resources: fixtureReader([{
+            resource: "sendmux/mailbox",
+            externalId: mailboxId,
+            data: { email: "agent@example.com" },
+        }]),
+    });
+    const loaded = await engine.load(
+        await testSealedUnit("sendmux#create-draft"),
+    );
+    for (const action of ["reply", "reply_all", "forward", "adopt"]) {
+        expectedBody = { ...fields, source: { message_id: "msg_1", action } };
+        const result = await loaded.run({
+            queryParams: { mailbox_id: mailboxId },
+            body: expectedBody,
+        });
+        assertEquals(result.httpStatus, 201);
+        assertEquals(result.usage.credits, {});
+    }
+    assertEquals(calls, 4);
+    const invalidFields: Json[] = [
+        { from: { email: "invalid" } },
+        { from: { ...address, name: "x".repeat(256) } },
+        ...["to", "cc", "bcc"].map((key) => ({
+            [key]: Array(51).fill(address),
+        })),
+        { reply_to: Array(21).fill(address) },
+        { subject: "x".repeat(999) },
+        { text_body: "x".repeat(1_000_001) },
+        { html_body: "x".repeat(1_000_001) },
+        { custom_headers: { Reference: "invalid" } },
+        { custom_headers: { "X-Reference": "x".repeat(999) } },
+        { attachments: Array(11).fill(fields.attachments[0]) },
+        { attachments: [{ ...fields.attachments[0], size_bytes: 7_500_001 }] },
+        { source: { message_id: "msg_1", action: "link" } },
+        { source: { message_id: "x".repeat(256), action: "reply" } },
+    ];
+    for (const body of invalidFields) {
+        await assertRejects(
+            () => loaded.run({ queryParams: { mailbox_id: mailboxId }, body }),
+            Error,
+            "INVALID_INPUT",
+        );
+    }
+    assertEquals(
+        (await loaded.run({
+            queryParams: { mailbox_id: "mbx_foreign" },
+            body: fields,
+        })).httpStatus,
+        404,
+    );
+    assertEquals(calls, 4);
+});
+
 Deno.test("sendmux#release-mailbox emits an owned release without immediate deletion", async () => {
     const engine = new Engine({
         transport: directTransport({
