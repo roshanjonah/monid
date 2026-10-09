@@ -38,7 +38,11 @@ Deno.test("sendmux local lifecycle persists one provision across store reopen", 
                     await loadFixture(
                         join(HERE, "fixtures/synthetic-create-mailbox.json"),
                     ),
-                    { "request.origin": "https://app.sendmux.ai" },
+                    {
+                        "request.origin": "https://app.sendmux.ai",
+                        "request.url":
+                            "https://app.sendmux.ai/api/v1/mailboxes",
+                    },
                 ),
             }),
             resources: store,
