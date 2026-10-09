@@ -10,8 +10,6 @@ permissions:
 jobs:
     check:
         runs-on: ubuntu-latest
-        env:
-            DENO_DIR: ${{ runner.temp }}/monid-deno-cache
         steps:
             - uses: actions/checkout@v4
             - uses: denoland/setup-deno@v2
@@ -21,6 +19,8 @@ jobs:
             - run: deno task test
             - name: Signature protection removal must fail after a valid owned refresh
               shell: bash
+              env:
+                  DENO_DIR: ${{ runner.temp }}/monid-deno-cache
               run: |
                   mkdir -p signature-acceptance
                   deno --version | tee signature-acceptance/runtime.txt
@@ -49,6 +49,8 @@ jobs:
                   PY
                   done
             - name: Unmodified listener and selected Sendmux replay acceptance
+              env:
+                  DENO_DIR: ${{ runner.temp }}/monid-deno-cache
               run: |
                   deno test --frozen-lockfile --unstable-kv --allow-read --allow-write --allow-env --allow-net=127.0.0.1,0.0.0.0 --allow-run=deno --reporter=junit --junit-path=signature-acceptance/listener-green.xml scripts/webhook-listener.integration.ts
                   deno task test --reporter=junit --junit-path=signature-acceptance/replay-green.xml connectors/sendmux/connector.test.ts connectors/sendmux/schedule-contract.test.ts scripts/webhook.test.ts
