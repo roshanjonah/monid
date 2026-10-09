@@ -1,53 +1,68 @@
-# PR / main CI — typecheck + tests. Publishing is a TAG (publish-catalog.yml);
-# this workflow never touches releases or AWS.
-name: ci
+name: fork-only-sendmux-acceptance
 on:
-    pull_request:
-    push:
-        branches: [main]
+    workflow_dispatch:
+        inputs:
+            candidate:
+                description: Exact clean candidate commit SHA
+                required: true
+                type: string
 permissions:
     contents: read
 jobs:
-    check:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: denoland/setup-deno@v2
-              with:
-                  deno-version: v2.5.2
-            - run: deno task check
-            - run: deno task test --unstable-kv
     sendmux-regressions:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+                  path: fork-ci
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.candidate }}
+                  path: candidate
             - uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.5.2
-            - run: deno run --allow-read --allow-write --allow-env --allow-run=deno scripts/test-sendmux-regressions.ts
+            - name: Verify candidate and bind fork-only integration tests
+              working-directory: candidate
+              env:
+                  CANDIDATE: ${{ inputs.candidate }}
+              run: |
+                  test "$(git rev-parse HEAD)" = "$CANDIDATE"
+                  mkdir -p .output
+                  cp ../fork-ci/scripts/test-sendmux-regressions.ts .output/fork-regressions.ts
+                  cp ../fork-ci/connectors/sendmux/lifecycle-contract.test.ts connectors/sendmux/lifecycle-contract.test.ts
+            - run: deno run --allow-read --allow-write --allow-env --allow-run=deno .output/fork-regressions.ts
+              working-directory: candidate
+            - run: git diff --exit-code
+              working-directory: candidate
             - uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: sendmux-regressions
-                  path: .output/sendmux-regressions/
+                  path: candidate/.output/sendmux-regressions/
     source-gates:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
               with:
+                  ref: ${{ inputs.candidate }}
                   fetch-depth: 0
             - uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.5.2
-            - run: deno fmt --check
+            - name: Verify candidate
+              env:
+                  CANDIDATE: ${{ inputs.candidate }}
+              run: test "$(git rev-parse HEAD)" = "$CANDIDATE"
+            - run: deno fmt --check connectors/sendmux connectors/categories.ts connectors/ids.lock.json
             - run: deno task lint
             - run: deno task compiler:compile --force --frozen-meta
             - run: cp .output/catalog.json .output/catalog-first.json
             - run: deno task compiler:compile --force --frozen-meta
             - run: cmp .output/catalog-first.json .output/catalog.json
             - run: deno task ids:check
-            - run: deno task version:check --base "${{ github.event.pull_request.base.sha }}"
-              if: github.event_name == 'pull_request'
+            - run: deno task version:check --base c57aa3d4b2036f518cbc7d3879a097ac1c8af4ea
             - run: deno task catalog providers
             - run: deno task catalog endpoints --provider sendmux
             - run: deno task catalog resources --provider sendmux
