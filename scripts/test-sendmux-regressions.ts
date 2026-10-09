@@ -140,12 +140,12 @@ async function runTests(
         ],
         stdout: "piped",
         stderr: "piped",
+        env: { NO_COLOR: "1" },
     }).output();
     const output = new TextDecoder().decode(result.stdout) +
         new TextDecoder().decode(result.stderr);
     await Deno.writeTextFile(`${logDirectory}/${name}.log`, output);
-    const plain = output.replace(/\x1b\[[0-9;]*m/g, "");
-    const match = plain.match(
+    const match = output.match(
         /(\d+) passed \| (\d+) failed(?: \| (\d+) ignored)?/,
     );
     if (!match) throw new Error(`${name}: no executed test summary; see log`);

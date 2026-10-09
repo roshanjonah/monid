@@ -69,7 +69,7 @@ Deno.test("sendmux compiled webhook routes inbox refreshes and delivery ignores 
             const expected = {
                 who: { kind: "resource", target },
                 what: { action: "refresh", target },
-            };
+            } as const;
             assertEquals(route(delivery(body)), expected);
             assertEquals(route(delivery(body)), expected);
         }

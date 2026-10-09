@@ -24,7 +24,7 @@ jobs:
             - uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.5.2
-            - run: deno run --allow-read --allow-write --allow-run=deno scripts/test-sendmux-regressions.ts
+            - run: deno run --allow-read --allow-write --allow-env --allow-run=deno scripts/test-sendmux-regressions.ts
             - uses: actions/upload-artifact@v4
               if: always()
               with:
