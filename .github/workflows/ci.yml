@@ -4,12 +4,14 @@ name: ci
 on:
     pull_request:
     push:
-        branches: [main]
+        branches: [main, agent/monid-row-03-signature-coverage]
 permissions:
     contents: read
 jobs:
     check:
         runs-on: ubuntu-latest
+        env:
+            DENO_DIR: ${{ runner.temp }}/monid-deno-cache
         steps:
             - uses: actions/checkout@v4
             - uses: denoland/setup-deno@v2
@@ -17,3 +19,41 @@ jobs:
                   deno-version: v2.x
             - run: deno task check
             - run: deno task test
+            - name: Signature protection removal must fail after a valid owned refresh
+              shell: bash
+              run: |
+                  mkdir -p signature-acceptance
+                  deno --version | tee signature-acceptance/runtime.txt
+                  for mutation in signature freshness ownership; do
+                    set +e
+                    MONID_SIGNATURE_MUTATION="$mutation" deno test --frozen-lockfile --unstable-kv --allow-read --allow-write --allow-env --allow-net=127.0.0.1,0.0.0.0 --allow-run=deno --reporter=junit --junit-path="signature-acceptance/$mutation.xml" scripts/webhook-listener.integration.ts > "signature-acceptance/$mutation.log" 2>&1
+                    result=$?
+                    set -e
+                    test "$result" -ne 0
+                    python3 - "$mutation" <<'PY'
+                  import sys, xml.etree.ElementTree as ET
+                  mutation = sys.argv[1]
+                  cases = ET.parse(f"signature-acceptance/{mutation}.xml").findall(".//testcase")
+                  def case(title):
+                      found = [c for c in cases if c.attrib["name"].endswith(" > " + title)]
+                      assert len(found) == 1, title
+                      return found[0]
+                  baseline = case("Gateway-produced Unicode and whitespace bytes refresh the owned inbox")
+                  assert baseline.find("failure") is None and baseline.find("skipped") is None
+                  titles = {"signature": "altered exact bytes are denied before refresh", "freshness": "expired Gateway signatures are denied before refresh", "ownership": "a signed foreign inbox event never refreshes or creates ownership"}
+                  failure = case(titles[mutation]).find("failure")
+                  assert failure is not None, titles[mutation]
+                  assert "AssertionError" in failure.attrib.get("message", ""), ET.tostring(failure)
+                  assert not any(c.find("skipped") is not None for c in cases)
+                  print(f"{mutation}: owned baseline passed; expected denial assertion failed")
+                  PY
+                  done
+            - name: Unmodified listener and selected Sendmux replay acceptance
+              run: |
+                  deno test --frozen-lockfile --unstable-kv --allow-read --allow-write --allow-env --allow-net=127.0.0.1,0.0.0.0 --allow-run=deno --reporter=junit --junit-path=signature-acceptance/listener-green.xml scripts/webhook-listener.integration.ts
+                  deno task test --reporter=junit --junit-path=signature-acceptance/replay-green.xml connectors/sendmux/connector.test.ts connectors/sendmux/schedule-contract.test.ts scripts/webhook.test.ts
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: signature-acceptance
+                  path: signature-acceptance/
