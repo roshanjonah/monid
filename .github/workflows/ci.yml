@@ -14,6 +14,41 @@ jobs:
             - uses: actions/checkout@v4
             - uses: denoland/setup-deno@v2
               with:
-                  deno-version: v2.x
+                  deno-version: v2.5.2
             - run: deno task check
-            - run: deno task test
+            - run: deno task test --unstable-kv
+    sendmux-regressions:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.5.2
+            - run: deno run --allow-read --allow-write --allow-run=deno scripts/test-sendmux-regressions.ts
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: sendmux-regressions
+                  path: .output/sendmux-regressions/
+    source-gates:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.5.2
+            - run: deno fmt --check
+            - run: deno task lint
+            - run: deno task compiler:compile --force --frozen-meta
+            - run: cp .output/catalog.json .output/catalog-first.json
+            - run: deno task compiler:compile --force --frozen-meta
+            - run: cmp .output/catalog-first.json .output/catalog.json
+            - run: deno task ids:check
+            - run: deno task version:check --base "${{ github.event.pull_request.base.sha }}"
+              if: github.event_name == 'pull_request'
+            - run: deno task catalog providers
+            - run: deno task catalog endpoints --provider sendmux
+            - run: deno task catalog resources --provider sendmux
+            - run: deno task catalog inspect-resource sendmux/mailbox
