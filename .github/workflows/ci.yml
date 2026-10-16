@@ -1,19 +1,57 @@
-# PR / main CI — typecheck + tests. Publishing is a TAG (publish-catalog.yml);
-# this workflow never touches releases or AWS.
-name: ci
+name: fork-only-sendmux-card-qualification
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Exact source candidate commit SHA
+        required: true
+        type: string
+      stage:
+        description: Focused red test or source qualification
+        required: true
+        type: choice
+        options: [red, green]
 permissions:
   contents: read
 jobs:
-  check:
+  source-gates:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
-      - run: deno task check
-      - run: deno task test
+          deno-version: v2.5.2
+      - name: Verify exact candidate
+        env:
+          CANDIDATE: ${{ inputs.candidate }}
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE"
+      - name: Red monthly resource card test
+        if: inputs.stage == 'red'
+        run: deno task test --filter 'zero monthly rent' connectors/sendmux/resources/mailbox/resource.test.ts
+      - name: Focused connector replay
+        if: inputs.stage == 'green'
+        run: deno task test connectors/sendmux
+      - name: Source format and lint
+        if: inputs.stage == 'green'
+        run: |
+          deno fmt --check connectors/sendmux openspec/changes/add-connector-sendmux
+          deno lint connectors/sendmux
+      - name: Deterministic compile and identity gates
+        if: inputs.stage == 'green'
+        run: |
+          deno task compiler:compile --force --frozen-meta
+          cp .output/catalog.json .output/catalog-first.json
+          deno task compiler:compile --force --frozen-meta
+          cmp .output/catalog-first.json .output/catalog.json
+          deno task ids:check
+          deno task version:check --base 96e1569dee3a0beee8a6aa8a70ec8c1773e32a21
+      - name: Inspect provider and resource catalog
+        if: inputs.stage == 'green'
+        run: |
+          deno task catalog endpoints --provider sendmux
+          deno task catalog resources --provider sendmux
+          deno task catalog inspect-resource sendmux/mailbox
