@@ -13,6 +13,9 @@ export default defineProvider({
         notes: [
             "Each mailbox action requires the ID of an inbox owned by this workspace.",
             "Register the account webhook callback and signing secret before using mailbox events.",
+            "One Sendmux provider key serves the integration. No child mailbox credential is required.",
+            "All endpoint calls have a zero call fee. Outgoing mail, incoming mail and retained storage are charged once through inbox usage readings.",
+            "The Pro subscription is USD 7 per team per month, separate from inbox usage. There is no per-inbox subscription fee.",
         ],
     },
     auth: { inject: presets.auth.bearer() },

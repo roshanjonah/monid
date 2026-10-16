@@ -8,7 +8,7 @@ customer-selected outgoing accounts. Monid must keep each workspace's inboxes
 separate even though the Sendmux integration credential belongs to one team.
 
 The Sendmux API supplies mailbox creation, deletion, and mailbox-scoped email
-operations. Its retained cost meter is being completed alongside this connector.
+operations and a retained cumulative cost meter.
 A connector must never turn a pending or failed meter read into zero usage.
 
 ## What changes
@@ -27,9 +27,15 @@ A connector must never turn a pending or failed meter read into zero usage.
 - Expose bounded mailbox reads: messages, threads, search, changes, labels,
   attachments, raw message, and attachment text. Preserve pagination and
   body/attachment limits from the Sendmux API.
-- Meter incoming email, outgoing email, and storage from the authoritative
-  retained mailbox cost window. A resource lifecycle read requires a final
-  window before settlement. Release waits for the final usage tail.
+- Use the existing monthly resource clock with zero inbox rent. Meter incoming
+  email, outgoing email, and storage once from their authoritative retained cost
+  readings. Keep the existing reconciliation cadence, final-window checks and
+  post-deletion reads. Endpoint calls have a zero call fee.
+- Explain the published USD rates with zero markup: connected outbound
+  0.000500 per provider-accepted recipient occurrence, managed outbound
+  0.000750, incoming 0.000500 per distinct mailbox delivery, and storage 0.02
+  per decimal GB-month, prorated by calendar day. The Pro subscription is
+  USD 7 per team per month, separate from inbox usage and never mailbox rent.
 - Verify Sendmux webhooks using the timestamp and signature headers over the
   exact request body. Route each event to its owned mailbox; replayed delivery
   attempts keep the event ID.
@@ -44,13 +50,16 @@ A connector must never turn a pending or failed meter read into zero usage.
 - Creating or editing a customer's sending provider connection.
 - A second charge for a draft-send endpoint when the owned mailbox meter already
   accounts for the accepted email.
+- A native per-recipient endpoint card. Send responses do not expose final
+  provider-accepted recipient counts or actual provider mode. Requested
+  recipients and HTTP success cannot substitute for that evidence.
 - Engine or resource ABI changes in this connector PR.
 
 ## Dependencies to verify before submission
 
-- Sendmux deploys its integration credential and complete final cost meter.
-- Monid confirms how its host waits for an incomplete final window, chooses the
-  release cutoff, and applies a final usage reading without double charging an
-  earlier reading. The public connector ABI does not prove those host rules.
-- Sendmux and Monid agree the resource rate card and credit mapping. The
-  connector must not invent a price from a Sendmux team invoice.
+- Qualify the deployed integration credential, mailbox APIs and retained cost
+  readings through the existing integration journey.
+- Qualify Monid's existing resource lifecycle, retries and post-deletion usage
+  reads. Source support does not establish hosted execution or card rendering.
+- Keep one provider key under operator custody. Each workspace's resource
+  ownership window limits access to its own inboxes.

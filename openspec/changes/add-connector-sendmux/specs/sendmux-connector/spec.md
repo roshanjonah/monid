@@ -26,12 +26,12 @@ inbox for Sendmux mailbox API requests.
 - **WHEN** a workspace calls a mailbox endpoint with another workspace's ID
 - **THEN** Monid returns its uniform not-found result with no Sendmux request
 
-### Requirement: Release remains retryable through final accounting
+### Requirement: Release uses the existing resource lifecycle
 
 Release SHALL make the inbox unavailable for new Monid actions and drive Sendmux
-deletion idempotently. A failed or incomplete final usage read SHALL remain
-retryable; it SHALL NOT report a successful zero-cost settlement. Release SHALL
-preserve the last authorised cost reading after the inbox is deleted.
+deletion idempotently. A failed or incomplete usage read SHALL remain retryable
+through the existing resource lifecycle and SHALL NOT report zero usage.
+Retained cost readings SHALL remain available after the inbox is deleted.
 
 #### Scenario: Delayed accepted delivery
 
@@ -82,6 +82,38 @@ or another Monid workspace's inbox.
 
 ## Meter and events
 
+### Requirement: Monthly inbox rent and endpoint calls are free
+
+The owned resource SHALL use one monthly period anchored to creation time with
+a fixed zero rent line. All 29 endpoint call fees SHALL remain FREE. Outgoing,
+incoming and storage usage SHALL be charged once through their existing
+authoritative resource readers. The Pro subscription of USD 7 per team per
+month SHALL remain separate and SHALL NOT become an inbox rent or second charge.
+
+#### Scenario: Read or send call
+
+- **WHEN** a workspace reads mail, edits a draft or requests its send
+- **THEN** the endpoint call has no separate fee, while actual mail delivery
+  and retained storage remain subject to their resource usage charges
+
+### Requirement: Explain published usage rates without inventing units
+
+Pricing metadata SHALL state USD 0.000500 per provider-accepted recipient
+occurrence for connected outbound, USD 0.000750 for managed outbound,
+USD 0.000500 per distinct mailbox delivery for incoming mail, and USD 0.02 per
+decimal GB-month for storage, prorated by calendar day, with zero markup.
+Accepted To, Cc and Bcc occurrences count separately and rejected recipients
+are not charged. Storage SHALL use the existing posted-cost reading rather
+than a rounded integer quantity or a new unit enum.
+
+#### Scenario: Send response precedes final provider outcome
+
+- **WHEN** the send response lacks final accepted-recipient counts or actual
+  provider mode
+- **THEN** the connector retains authoritative outgoing resource accounting
+  and does not infer a per-recipient endpoint charge from requested recipients
+  or HTTP success
+
 ### Requirement: Reconcile actual mailbox cost
 
 The owned resource SHALL read a cumulative half-open cost window for incoming
@@ -93,7 +125,8 @@ window SHALL return the same amounts.
 #### Scenario: Pending invoice
 
 - **WHEN** accepted email or storage cost is incurred but not yet posted
-- **THEN** the meter reports pending and Monid does not settle that window
+- **THEN** the meter remains retryable through the existing resource lifecycle
+  and does not report zero usage
 
 ### Requirement: Authenticate and route webhook events
 

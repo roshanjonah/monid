@@ -7,17 +7,24 @@ export default defineResource({
         displayName: "Inbox",
         summary: "An email inbox owned by this workspace.",
         description: "An inbox for reading and sending email.",
+        notes: [
+            "Inbox creation, monthly rent and release cost USD 0. Endpoint calls have a zero call fee.",
+            "Connected outbound costs USD 0.000500 per provider-accepted recipient occurrence. Managed outbound costs USD 0.000750 per provider-accepted recipient occurrence.",
+            "Accepted To, Cc and Bcc occurrences count separately. Rejected recipients are not charged.",
+            "Incoming mail costs USD 0.000500 per distinct mailbox delivery.",
+            "Storage costs USD 0.02 per decimal GB-month, prorated by calendar day.",
+            "Usage readings report posted outgoing, incoming and storage costs with zero markup. They do not add a send-call charge.",
+        ],
     },
     data: z.strictObject({ email: z.email() }),
     inputs: {
         create: z.strictObject({ email: z.email() }),
         release: z.strictObject({ public_id: z.string().min(1) }),
     },
-    // Candidate-only display card: one reported USD maps to one default
-    // dollar credit. Host exchange and the daily cutoff need agreement before PR.
     usage: {
-        period: { unit: "DAY", count: 1, anchor: "CALENDAR" },
+        period: { unit: "MONTH", count: 1, anchor: "CREATION_TIME" },
         lines: {
+            rent: { consumes: { credit: "default", amount: 0 } },
             incoming: {
                 price: {
                     unit: Unit.CREDIT,
