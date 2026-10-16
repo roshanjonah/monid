@@ -5,9 +5,9 @@
 - [ ] 1.1 Verify the deployed Sendmux integration credential, mailbox create,
       read, delete, and idempotent replay with an owned team.
 - [ ] 1.2 Verify the deployed final cost-window shape, retained deleted-inbox
-      read, and Monid host cutoff, retry, and final settlement behaviour.
-- [ ] 1.3 Agree Monid credit mapping and resource period without inventing rates
-      from Sendmux's internal invoice.
+      reads and Monid's existing resource lifecycle retries.
+- [x] 1.3 Define zero monthly inbox rent, zero endpoint call fees and published
+      USD usage-rate metadata without charging the team subscription again.
 
 ## 2. Owned inbox tracer
 
@@ -35,4 +35,4 @@
 - [ ] 4.2 Run format, lint, check, test, double compile, identity lock, version
       gate, catalog inspection, and a real integration journey.
 - [ ] 4.3 Submit the PR after matching Sendmux APIs are deployed and record the
-      reviewed Monid host billing agreement.
+      qualified existing lifecycle journey and hosted pricing presentation.
