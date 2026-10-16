@@ -1,7 +1,12 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl } from "@std/path";
 import type { Json, OwnedResource } from "@shared/core";
-import { loadFixture, loadResource, testResourceUnit } from "@shared/testing";
+import {
+    loadFixture,
+    loadResource,
+    testBundle,
+    testResourceUnit,
+} from "@shared/testing";
 import { directTransport, Engine, EngineError } from "@monid/connector-engine";
 
 const HERE = fromFileUrl(new URL("../../", import.meta.url));
@@ -10,6 +15,36 @@ const ROW: OwnedResource = {
     externalId: "mbx_owned",
     data: { email: "agent@example.com" },
 };
+
+Deno.test("sendmux mailbox has zero monthly rent and charges usage only through resource readings", async () => {
+    const unit = await testResourceUnit("sendmux/mailbox");
+    assertEquals(unit.doc.usage.period, {
+        unit: "MONTH",
+        count: 1,
+        anchor: "CREATION_TIME",
+    });
+    assertEquals(unit.doc.usage.lines.rent, {
+        consumes: { credit: "default", amount: 0 },
+    });
+    assertEquals(Object.keys(unit.doc.usage.lines).sort(), [
+        "incoming",
+        "outgoing",
+        "rent",
+        "storage",
+    ]);
+    assertEquals(Object.keys(unit.doc.reconcileUsage ?? {}).sort(), [
+        "incoming",
+        "outgoing",
+        "storage",
+    ]);
+    const endpoints = Object.values((await testBundle()).endpoints).filter(
+        (endpoint) => endpoint.provider === "sendmux",
+    );
+    assertEquals(endpoints.length, 29);
+    for (const endpoint of endpoints) {
+        assertEquals(endpoint.usage.model.kind, "FREE", endpoint.id);
+    }
+});
 
 Deno.test("sendmux mailbox release treats repeated deletion as success", async () => {
     const resource = await loadResource({
